@@ -114,7 +114,6 @@ memset:
 	.end
 #else   /* !(SCORPION_NEON_OPTIMIZATION || CORTEX_CACHE_LINE_32) */
 
-	
 		/*
 		 * Optimized memset() for ARM.
          *
