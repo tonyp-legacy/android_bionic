@@ -52,7 +52,7 @@
 #include "linker_format.h"
 
 #define ALLOW_SYMBOLS_FROM_MAIN 1
-#define SO_MAX 192
+#define SO_MAX 128
 
 /* Assume average path length of 64 and max 8 paths */
 #define LDPATH_BUFSIZE 512
@@ -416,16 +416,9 @@ static unsigned elfhash(const char *_name)
     while(*name) {
         h = (h << 4) + *name++;
         g = h & 0xf0000000;
-        /* The hash algorithm in the ELF ABI is as follows:
-         *   if (g != 0)
-         *       h ^=g >> 24;
-         *   h &= ~g;
-         * But we can use the equivalent and faster implementation:
-         */
+        h ^= g;
         h ^= g >> 24;
     }
-    /* Lift the operation out of the inner loop */
-    h &= 0x0fffffff;
     return h;
 }
 
@@ -648,11 +641,8 @@ static int open_library(const char *name)
 }
 
 /* temporary space for holding the first page of the shared lib
- * which contains the elf header (with the pht).
- * It is 32-bit aligned for ELF manipulation efficiency.
- */
-static unsigned char __header[PAGE_SIZE]
-                     __attribute__((aligned(4)));
+ * which contains the elf header (with the pht). */
+static unsigned char __header[PAGE_SIZE];
 
 typedef struct {
     long mmap_addr;
@@ -686,22 +676,6 @@ is_prelinked(int fd, const char *name)
     return (unsigned long)info.mmap_addr;
 }
 
-#if _BYTE_ORDER == _LITTLE_ENDIAN
-#define ELFMAG_U32 \
-    ((uint32_t)((ELFMAG0 << (EI_MAG0 * 8)) | \
-                (ELFMAG1 << (EI_MAG1 * 8)) | \
-                (ELFMAG2 << (EI_MAG2 * 8)) | \
-                (ELFMAG3 << (EI_MAG3 * 8))))
-#elif _BYTE_ORDER == _BIG_ENDIAN
-#define ELFMAG_U32 \
-    ((uint32_t)((ELFMAG0 << (EI_MAG3 * 8)) | \
-                (ELFMAG1 << (EI_MAG2 * 8)) | \
-                (ELFMAG2 << (EI_MAG1 * 8)) | \
-                (ELFMAG3 << (EI_MAG0 * 8)))
-#else
-#error "Unknown target byte order!"
-#endif
-
 /* verify_elf_object
  *      Verifies if the object @ base is a valid ELF object
  *
@@ -715,10 +689,11 @@ static int
 verify_elf_object(void *base, const char *name)
 {
     Elf32_Ehdr *hdr = (Elf32_Ehdr *) base;
-    uint32_t *magic32 = (uint32_t *) &hdr->e_ident;
 
-    if (*magic32 != ELFMAG_U32)
-        return -1;
+    if (hdr->e_ident[EI_MAG0] != ELFMAG0) return -1;
+    if (hdr->e_ident[EI_MAG1] != ELFMAG1) return -1;
+    if (hdr->e_ident[EI_MAG2] != ELFMAG2) return -1;
+    if (hdr->e_ident[EI_MAG3] != ELFMAG3) return -1;
 
     /* TODO: Should we verify anything else in the header? */
 #ifdef ANDROID_ARM_LINKER

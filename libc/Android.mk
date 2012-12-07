@@ -269,6 +269,7 @@ libc_common_src_files := \
 	bionic/libc_init_common.c \
 	bionic/logd_write.c \
 	bionic/md5.c \
+	bionic/memmove_words.c \
 	bionic/pututline.c \
 	bionic/realpath.c \
 	bionic/sched_getaffinity.c \
@@ -277,6 +278,7 @@ libc_common_src_files := \
 	bionic/sched_cpucount.c \
 	bionic/semaphore.c \
 	bionic/sha1.c \
+	bionic/ssp.c \
 	bionic/stubs.c \
 	bionic/system_properties.c \
 	bionic/tdelete.c \
@@ -364,34 +366,14 @@ libc_common_src_files += \
 	arch-arm/bionic/memset.S \
 	arch-arm/bionic/setjmp.S \
 	arch-arm/bionic/sigsetjmp.S \
+	arch-arm/bionic/strlen.c.arm \
 	arch-arm/bionic/strcpy.S \
 	arch-arm/bionic/strcmp.S \
 	arch-arm/bionic/syscall.S \
+	string/memmove.c.arm \
+	string/bcopy.c \
 	string/strncmp.c \
 	unistd/socketcalls.c
-ifeq ($(ARCH_ARM_HAVE_ARMV7A),true)
-libc_common_src_files += arch-arm/bionic/strlen-armv7.S
-else
-libc_common_src_files += arch-arm/bionic/strlen.c.arm
-endif
-
-# Check if we want a neonized version of memmove instead of the
-# current ARM version
-ifeq ($(TARGET_USE_SCORPION_BIONIC_OPTIMIZATION),true)
-libc_common_src_files += \
-	arch-arm/bionic/memmove.S \
-	bionic/memmove_words.c
-else
-ifneq (, $(filter true,$(TARGET_USE_KRAIT_BIONIC_OPTIMIZATION) $(TARGET_USE_SPARROW_BIONIC_OPTIMIZATION)))
- libc_common_src_files += \
-	arch-arm/bionic/memmove.S
- else # Other ARM
- libc_common_src_files += \
-	string/bcopy.c \
-	string/memmove.c.arm \
-	bionic/memmove_words.c
- endif # !TARGET_USE_KRAIT_BIONIC_OPTIMIZATION
-endif # !TARGET_USE_SCORPION_BIONIC_OPTIMIZATION
 
 # These files need to be arm so that gdbserver
 # can set breakpoints in them without messing
@@ -437,7 +419,6 @@ libc_common_src_files += \
 	arch-x86/string/strncmp_wrapper.S \
 	arch-x86/string/strlen_wrapper.S \
 	string/strcpy.c \
-	bionic/memmove_words.c \
 	bionic/pthread-atfork.c \
 	bionic/pthread-rwlocks.c \
 	bionic/pthread-timers.c \
@@ -472,10 +453,6 @@ libc_common_cflags := \
 		-DPOSIX_MISTAKE \
                 -DLOG_ON_HEAP_ERROR \
 
-ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
-libc_common_cflags += -DQCOM_HARDWARE
-endif
-
 # these macro definitions are required to implement the
 # 'timezone' and 'daylight' global variables, as well as
 # properly update the 'tm_gmtoff' field in 'struct tm'.
@@ -503,33 +480,6 @@ ifeq ($(TARGET_ARCH),arm)
   endif
   ifeq ($(ARCH_ARM_USE_NON_NEON_MEMCPY),true)
     libc_common_cflags += -DARCH_ARM_USE_NON_NEON_MEMCPY
-  endif
-  # Add in defines to activate SCORPION_NEON_OPTIMIZATION
-  ifeq ($(TARGET_USE_SCORPION_BIONIC_OPTIMIZATION),true)
-    libc_common_cflags += -DSCORPION_NEON_OPTIMIZATION
-    ifeq ($(TARGET_USE_SCORPION_PLD_SET),true)
-      libc_common_cflags += -DPLDOFFS=$(TARGET_SCORPION_BIONIC_PLDOFFS)
-      libc_common_cflags += -DPLDSIZE=$(TARGET_SCORPION_BIONIC_PLDSIZE)
-    endif
-  endif
-  ifeq ($(TARGET_HAVE_TEGRA_ERRATA_657451),true)
-    libc_common_cflags += -DHAVE_TEGRA_ERRATA_657451
-  endif
-  # Add in defines to activate KRAIT_NEON_OPTIMIZATION
-  ifeq ($(TARGET_USE_KRAIT_BIONIC_OPTIMIZATION),true)
-    libc_common_cflags += -DKRAIT_NEON_OPTIMIZATION
-    ifeq ($(TARGET_USE_KRAIT_PLD_SET),true)
-      libc_common_cflags += -DPLDOFFS=$(TARGET_KRAIT_BIONIC_PLDOFFS)
-      libc_common_cflags += -DPLDTHRESH=$(TARGET_KRAIT_BIONIC_PLDTHRESH)
-      libc_common_cflags += -DPLDSIZE=$(TARGET_KRAIT_BIONIC_PLDSIZE)
-      libc_common_cflags += -DBBTHRESH=$(TARGET_KRAIT_BIONIC_BBTHRESH)
-    endif
-  endif
-  ifeq ($(TARGET_USE_SPARROW_BIONIC_OPTIMIZATION),true)
-    libc_common_cflags += -DSPARROW_NEON_OPTIMIZATION
-  endif
-  ifeq ($(TARGET_CORTEX_CACHE_LINE_32),true)
-    libc_common_cflags += -DCORTEX_CACHE_LINE_32
   endif
 else # !arm
   ifeq ($(TARGET_ARCH),x86)
@@ -635,25 +585,6 @@ ALL_GENERATED_SOURCES += $(GEN)
 WITH_MALLOC_CHECK_LIBC_A := $(strip $(WITH_MALLOC_CHECK_LIBC_A))
 
 # ========================================================
-# libbionic_ssp.a - stack protector code
-# ========================================================
-#
-# The stack protector code needs to be compiled
-# with -fno-stack-protector, since it modifies the
-# stack canary.
-
-include $(CLEAR_VARS)
-
-LOCAL_SRC_FILES := bionic/ssp.c
-LOCAL_CFLAGS := $(libc_common_cflags) -fno-stack-protector
-LOCAL_C_INCLUDES := $(libc_common_c_includes)
-LOCAL_MODULE := libbionic_ssp
-LOCAL_SYSTEM_SHARED_LIBRARIES :=
-
-include $(BUILD_STATIC_LIBRARY)
-
-
-# ========================================================
 # libc_common.a
 # ========================================================
 include $(CLEAR_VARS)
@@ -665,7 +596,6 @@ LOCAL_CFLAGS += -DCRT_LEGACY_WORKAROUND
 endif
 LOCAL_C_INCLUDES := $(libc_common_c_includes)
 LOCAL_MODULE := libc_common
-LOCAL_WHOLE_STATIC_LIBRARIES := libbionic_ssp
 LOCAL_SYSTEM_SHARED_LIBRARIES :=
 
 include $(BUILD_STATIC_LIBRARY)

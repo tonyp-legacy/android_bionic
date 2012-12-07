@@ -73,6 +73,7 @@ libm_common_src_files:= \
 	src/s_ceill.c \
 	src/s_copysign.c \
 	src/s_copysignf.c \
+	src/s_cos.c \
 	src/s_cosf.c \
 	src/s_erf.c \
 	src/s_erff.c \
@@ -132,6 +133,7 @@ libm_common_src_files:= \
 	src/s_signgam.c \
 	src/s_significand.c \
 	src/s_significandf.c \
+	src/s_sin.c \
 	src/s_sinf.c \
 	src/s_tan.c \
 	src/s_tanf.c \
@@ -150,7 +152,6 @@ libm_common_src_files:= \
 	src/s_isnan.c \
 	src/s_modf.c
 
-libm_common_cflags :=
 
 ifeq ($(TARGET_ARCH),arm)
   libm_common_src_files += \
@@ -160,37 +161,9 @@ ifeq ($(TARGET_ARCH),arm)
 	src/s_scalbn.c \
 	src/s_scalbnf.c
 
-  ifeq ($(TARGET_USE_KRAIT_BIONIC_OPTIMIZATION),true)
-    libm_common_src_files += \
-	  arm/e_pow.S \
-	  arm/s_cos.S \
-	  arm/s_sin.S
-    libm_common_cflags += -DKRAIT_NEON_OPTIMIZATION -fno-if-conversion
-  else
-    libm_common_src_files += \
-	  src/s_cos.c \
-      src/s_sin.c
-  endif
-
-  ifeq ($(TARGET_USE_SPARROW_BIONIC_OPTIMIZATION),true)
-    libm_common_src_files += \
-          arm/e_pow.S
-    libm_common_cflags += -DSPARROW_NEON_OPTIMIZATION
-  endif
-
-  ifeq ($(TARGET_USE_SCORPION_BIONIC_OPTIMIZATION),true)
-    libm_common_src_files += \
-          arm/e_pow.S
-    libm_common_cflags += -DSCORPION_NEON_OPTIMIZATION
-  endif
-
   libm_common_includes = $(LOCAL_PATH)/arm
 
 else
-  libm_common_src_files += \
-	src/s_cos.c \
-	src/s_sin.c
-
   ifeq ($(TARGET_OS)-$(TARGET_ARCH),linux-x86)
     libm_common_src_files += \
 	i387/fenv.c \
@@ -216,8 +189,6 @@ LOCAL_SRC_FILES := \
 LOCAL_ARM_MODE := arm
 LOCAL_C_INCLUDES += $(libm_common_includes)
 
-LOCAL_CFLAGS:= $(libm_common_cflags)
-
 LOCAL_MODULE:= libm
 
 LOCAL_SYSTEM_SHARED_LIBRARIES := libc
@@ -235,8 +206,6 @@ LOCAL_SRC_FILES := \
 LOCAL_ARM_MODE := arm
 
 LOCAL_C_INCLUDES += $(libm_common_includes)
-
-LOCAL_CFLAGS:= $(libm_common_cflags)
 
 LOCAL_MODULE:= libm
 
